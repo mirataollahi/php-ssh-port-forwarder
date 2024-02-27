@@ -1,0 +1,5 @@
+*.db
+*.sql
+*.sqlite
+.idea
+vendor

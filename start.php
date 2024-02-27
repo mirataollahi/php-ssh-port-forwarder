@@ -1,16 +1,44 @@
 <?php
 
+
+/*
+ * Define Application Network Configs
+ */
+
+const SSH_PORT = 22;
+const SSH_HOST = '10.10.10.1';
+const PORTS = ['80:80', '443:443'];
+
+
+/*
+ * Application Logs Levels
+ */
+const INFO_LOG = 2;
+const SUCCESS_LOG = 4;
+const WARNING_LOG = 8;
+const ERROR_LOG = 16;
+const LOGS_TABLE = 'logs';
+const ACTIVE_LOGS = INFO_LOG | SUCCESS_LOG | WARNING_LOG | ERROR_LOG;
+const DATABASE_LOG = true;
+
+
+/*
+ * Starting Application
+ */
+$tunnelManager = new RemoteManager();
+
+
 class RemoteManager
 {
-    public const sshPort = 1530;
-    public const sshHost = 'SSH_HOST_ADDRESS';
-    public const forwardingPorts = [ '80:80', '443:443']; // Sample ports
+    public Database $database;
+
     public array $report = [];
 
     public function __construct()
     {
         $this->log(PHP_EOL . "Welcome to ssh port forwarder script", "success", 0.5);
         $this->log(PHP_EOL . "Starting SSH Forwarding Application ...", "purple", 1);
+        $this->database = new Database();
         $this->endSection();
         $this->manageSSHTunnels();
         $this->showAppProcessReport();
@@ -23,33 +51,47 @@ class RemoteManager
      */
     public function manageSSHTunnels(): void
     {
-        foreach (self::forwardingPorts as $processId => $port) {
-            list($localPort, $remotePort) = explode(':', $port);
-            $this->report[$processId] = [
-                'local_port' => $localPort,
-                'remote_port' => $remotePort,
-            ];
-            $this->log(str_repeat('*', 50));
-            $this->log("Starting forwarding port {$localPort} to {$remotePort} port ... ", 'light_blue');
-            sleep(1);
-            if (is_numeric($localPort) && is_numeric($remotePort)) {
-                if (!$this->isPortFree($localPort)) {
-                    $this->startTunnel($localPort, $remotePort);
-                    $message = "Successful remote connection started $localPort:$remotePort";
-                    $this->log($message, "success");
-                    $this->report[$processId]['message'] = $message;
-                    $this->report[$processId]['result'] = 'success';
+        foreach (PORTS as $processId => $port) {
+            try {
+                list($localPort, $remotePort) = explode(':', $port);
+                $this->report[$processId] = [
+                    'local_port' => $localPort,
+                    'remote_port' => $remotePort,
+                ];
+                $this->log(str_repeat('*', 50));
+                $this->log("Starting forwarding port {$localPort} to {$remotePort} port ... ", 'light_blue');
+                sleep(1);
+                if (is_numeric($localPort) && is_numeric($remotePort)) {
+                    if (!$this->isPortFree($localPort)) {
+                        $this->startTunnel($localPort, $remotePort);
+                        $message = "Successful remote connection started $localPort:$remotePort";
+                        $this->log($message, "success");
+                        $this->report[$processId]['message'] = $message;
+                        $this->report[$processId]['result'] = 'success';
+                    } else {
+                        $message = "The port forwarding process ($localPort:$remotePort) exist";
+                        $this->report[$processId]['message'] = $message;
+                        $this->log($message, 'info');
+                        $this->report[$processId]['result'] = 'info';
+                    }
                 } else {
-                    $message = "The port forwarding process ($localPort:$remotePort) exist";
-                    $this->report[$processId]['message'] = $message;
-                    $this->log($message, 'warning');
-                    $this->report[$processId]['result'] = 'warning';
+                    $this->report[$processId]['message'] = "Invalid forwarding format";
+                    $this->report[$processId]['result'] = 'error';
                 }
-            } else {
-                $this->report[$processId]['message'] = "Invalid forwarding format";
-                $this->report[$processId]['result'] = 'error';
+                $this->endSection();
+            } catch (Exception $exception) {
+                $this->log("Unknown error in running process");
+            } finally {
+                if (DATABASE_LOG)
+                    $this->database->storeLog(
+                        logLevel: $this->report[$processId]['result'],
+                        message: $message,
+                        localHost: '0.0.0.0', localPort: $localPort ?? null,
+                        remoteHost: SSH_HOST, remotePort: $remotePort ?? null,
+                        sshHost: SSH_HOST, sshPort: SSH_PORT
+                    );
             }
-            $this->endSection();
+
         }
     }
 
@@ -69,7 +111,6 @@ class RemoteManager
         return false;
     }
 
-
     /**
      * Kill current exist ssh port forwarding process the os
      *
@@ -79,7 +120,7 @@ class RemoteManager
      */
     public function killExistingTunnels(int $localPort, int $remotePort): void
     {
-        exec("pkill -f 'ssh -p " . self::sshPort . " -f -N -L 0.0.0.0:$localPort:$remotePort:$localPort'");
+        exec("pkill -f 'ssh -p " . SSH_PORT . " -f -N -L 0.0.0.0:$localPort:$remotePort:$localPort'");
         $this->log("Old remote connection killed in ports $localPort:$remotePort");
     }
 
@@ -92,7 +133,7 @@ class RemoteManager
      */
     public function startTunnel(int $localPort, int $remotePort): void
     {
-        exec("ssh -p " . self::sshPort . " -f -N -L 0.0.0.0:$localPort:" . self::sshHost . ":$remotePort root@" . self::sshHost);
+        // exec("ssh -p " . SSH_PORT . " -f -N -L 0.0.0.0:$localPort:" . SSH_HOST . ":$remotePort root@" . SSH_HOST);
     }
 
     /**
@@ -104,7 +145,7 @@ class RemoteManager
     public function isTunnelAlive(int $localPort): bool
     {
         try {
-            $host = self::sshHost;
+            $host = SSH_HOST;
             $timeout = 4;
             $socket = @fsockopen($host, $localPort, $errno, $error, $timeout);
             $isAlive = is_resource($socket);
@@ -114,7 +155,6 @@ class RemoteManager
             return false;
         }
     }
-
 
     /**
      * Show terminal message log
@@ -139,7 +179,6 @@ class RemoteManager
         if ($processDuration)
             $this->sleep($processDuration);
     }
-
 
     /**
      * Script end sections views
@@ -175,9 +214,8 @@ class RemoteManager
     {
         $this->log(PHP_EOL . "Port Forwarding Results:", 'purple');
         $this->log(str_repeat('-', 75), 'info');
-        $this->log("| " . str_pad("Result", 15) ."| " . str_pad("Local Port", 15) . " | " . str_pad("Remote Port", 15) . " | " . str_pad("Result", 15) . " | " . "Message", 'info');
+        $this->log("| " . str_pad("Result", 15) . "| " . str_pad("Local Port", 15) . " | " . str_pad("Remote Port", 15) . " | " . str_pad("Result", 15) . " | " . "Message", 'info');
         $this->log(str_repeat('-', 75), 'info');
-
         foreach ($this->report as $process) {
             $localPort = $process['local_port'] ?? 0;
             $remotePort = $process['remote_port'] ?? 0;
@@ -187,7 +225,9 @@ class RemoteManager
             $lineColor = 'light_blue';
             if ($result === 'success') {
                 $lineColor = 'success';
-            } elseif ($result === 'warning') {
+            }if ($result === 'info') {
+                $lineColor = 'info';
+            } elseif ($result === 'OK') {
                 $lineColor = 'warning';
             } elseif ($result === 'error') {
                 $lineColor = 'error';
@@ -215,4 +255,86 @@ class RemoteManager
 }
 
 
-$tunnelManager = new RemoteManager();
+class Database
+{
+
+    public \PDO|null $driver = null;
+
+    private const SQL_LITE_FILE = 'logs.db';
+
+    public bool $isConnected = false;
+
+    public function __construct()
+    {
+        $this->initPdo();
+        $this->createLogsTable();
+    }
+
+    /**
+     * Initial pdo sql lite connection
+     *
+     * @return void
+     */
+    public function initPdo(): void
+    {
+        try {
+            date_default_timezone_set("Asia/Tehran");
+            $this->driver = new PDO('sqlite:' . self::SQL_LITE_FILE);
+            $this->driver->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+            $this->driver->exec("PRAGMA timezone = 'Asia/Tehran'");
+            $this->createLogsTable();
+        } catch (PDOException $e) {
+            die("Database connection failed: " . $e->getMessage());
+        }
+    }
+
+    private function createLogsTable(): void
+    {
+        $tableName = LOGS_TABLE;
+        try {
+            $createTableQuery = "CREATE TABLE IF NOT EXISTS {$tableName} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                log_type TEXT,
+                message TEXT,
+                local_host TEXT,
+                local_port INT,
+                remote_host TEXT,
+                remote_port INT,
+                ssh_host TEXT,
+                ssh_port INT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )";
+            $this->driver->exec($createTableQuery);
+            $this->isConnected = true;
+            return;
+        } catch (Exception $exception) {
+            $this->isConnected = false;
+            echo $exception->getMessage() . PHP_EOL;
+        }
+    }
+
+    public function storeLog(?string $logLevel = null, ?string $message = null, ?string $localHost = null, int|string|null $localPort = null, ?string $remoteHost = null, int|string|null $remotePort = null, ?string $sshHost = null, int|string|null $sshPort = null): void
+    {
+        $tableName = LOGS_TABLE;
+        if (!$logLevel) $logLevel = INFO_LOG;
+        try {
+            $insertQuery = "INSERT INTO $tableName (log_type, message, local_host, local_port, remote_host, remote_port, ssh_host, ssh_port,created_at) VALUES (:log_type, :message, :local_host, :local_port, :remote_host, :remote_port, :ssh_host, :ssh_port, datetime('now'))";
+            $statement = $this->driver->prepare($insertQuery);
+            $statement->execute([
+                'log_type' => $logLevel,
+                'message' => $message,
+                'local_host' => $localHost,
+                'local_port' => (int)$localPort,
+                'remote_host' => $remoteHost,
+                'remote_port' => (int)$remotePort,
+                'ssh_host' => $sshHost,
+                'ssh_port' => (int)$sshPort,
+            ]);
+        } catch (PDOException $e) {
+            die("Error inserting log into database: " . $e->getMessage());
+        }
+    }
+}
+
+
+
