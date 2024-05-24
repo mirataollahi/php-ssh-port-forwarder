@@ -12,6 +12,15 @@ This PHP script allows for managing SSH port forwarding for remote server connec
 **Usage**:
     - Run the script to start the SSH port forwarding application.
     - The script will manage SSH tunnels for the defined port forwarding configurations.
+<br><br>
+    
+## Install PHP (8.x) in Ubuntu : 
+```cli
+sudo dpkg -l | grep php | tee packages.txt
+sudo add-apt-repository ppa:ondrej/php
+sudo apt update
+sudo apt install php8.2 php8.2-cli php8.2-{bz2,curl,mbstring,intl,sqlite3}
+```
 
 ## How to Use
 
