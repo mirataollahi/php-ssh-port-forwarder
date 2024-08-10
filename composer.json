@@ -1,0 +1,10 @@
+{
+    "name": "php/ssh-port-forwarder",
+    "description": "Simple ssh port forward runner with php",
+    "autoload": {
+        "psr-4": {
+            "App\\": "app/"
+        }
+    },
+    "require": {}
+}

@@ -2,4 +2,5 @@
 *.sql
 *.sqlite
 .idea
-vendor
+composer.lock
+
