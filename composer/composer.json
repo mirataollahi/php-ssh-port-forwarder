@@ -1,0 +1,10 @@
+{
+    "name": "php/ssh-port-forwarder",
+    "description": "PHP script to run ssh tunnel to forward local ports to any destination",
+    "autoload": {
+        "psr-4": {
+            "App\\": "../app/"
+        }
+    },
+    "require": {}
+}
