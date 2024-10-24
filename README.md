@@ -58,9 +58,18 @@ sudo apt install php8.2 php8.2-cli php8.2-{bz2,curl,mbstring,intl,sqlite3}
 ## How to Use
 
 
+### Generate ssh key and copy server ssh id
+Copy destination ssh auth info 
+```bash
+ssh-keygen
 
-1 . **Configuration**:
-    - Update the following constants in the script according to your environment:<br>
+ssh-copy-id -p 2222 root@192.168.88.100
+```
+
+
+### Configuration:
+    
+- Update the following constants in the script according to your environment:<br>
         - `sshPort`: The SSH port to connect to on the remote server.<br>
         - `sshHost`: The IP address or domain of the remote server .<br>
         - `forwardingPorts`: An array of local and remote port pairs for port forwarding.
