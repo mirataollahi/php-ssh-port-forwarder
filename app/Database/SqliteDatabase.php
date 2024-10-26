@@ -2,6 +2,9 @@
 
 namespace App\Database;
 
+use App\Logger\Logger;
+use App\Logger\LogLevel;
+use Exception;
 use PDO;
 use PDOException;
 
@@ -13,9 +16,12 @@ class SqliteDatabase
     private const SQL_LITE_FILE = 'logs.db';
 
     public bool $isConnected = false;
+    public Logger $logger;
+    public string $table = 'logs';
 
     public function __construct()
     {
+        $this->logger = new Logger('SQLITE');
         $this->initPdo();
         $this->createLogsTable();
     }
@@ -28,7 +34,6 @@ class SqliteDatabase
     public function initPdo(): void
     {
         try {
-            date_default_timezone_set("Asia/Tehran");
             $this->driver = new PDO('sqlite:' . self::SQL_LITE_FILE);
             $this->driver->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
             $this->driver->exec("PRAGMA timezone = 'Asia/Tehran'");
@@ -40,9 +45,8 @@ class SqliteDatabase
 
     private function createLogsTable(): void
     {
-        $tableName = LOGS_TABLE;
         try {
-            $createTableQuery = "CREATE TABLE IF NOT EXISTS {$tableName} (
+            $createTableQuery = "CREATE TABLE IF NOT EXISTS {$this->table} (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 log_type TEXT,
                 message TEXT,
@@ -63,15 +67,14 @@ class SqliteDatabase
         }
     }
 
-    public function storeLog(?string $logLevel = null, ?string $message = null, ?string $localHost = null, int|string|null $localPort = null, ?string $remoteHost = null, int|string|null $remotePort = null, ?string $sshHost = null, int|string|null $sshPort = null): void
+    public function storeLog(?LogLevel $logLevel = null, ?string $message = null, ?string $localHost = null, int|string|null $localPort = null, ?string $remoteHost = null, int|string|null $remotePort = null, ?string $sshHost = null, int|string|null $sshPort = null): void
     {
-        $tableName = LOGS_TABLE;
-        if (!$logLevel) $logLevel = INFO_LOG;
+        if (!$logLevel) $logLevel = LogLevel::INFO;
         try {
-            $insertQuery = "INSERT INTO $tableName (log_type, message, local_host, local_port, remote_host, remote_port, ssh_host, ssh_port,created_at) VALUES (:log_type, :message, :local_host, :local_port, :remote_host, :remote_port, :ssh_host, :ssh_port, datetime('now'))";
+            $insertQuery = "INSERT INTO $this->table (log_type, message, local_host, local_port, remote_host, remote_port, ssh_host, ssh_port,created_at) VALUES (:log_type, :message, :local_host, :local_port, :remote_host, :remote_port, :ssh_host, :ssh_port, datetime('now'))";
             $statement = $this->driver->prepare($insertQuery);
             $statement->execute([
-                'log_type' => $logLevel,
+                'log_type' => $logLevel->value ?: LogLevel::INFO->value,
                 'message' => $message,
                 'local_host' => $localHost,
                 'local_port' => (int)$localPort,
